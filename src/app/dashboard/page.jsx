@@ -1,80 +1,255 @@
 "use client";
-import { useRouter } from "next/navigation";
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
-import { Menu, ChevronLeft, ChevronRight, Plus } from "lucide-react";
-import { useEffect, useState } from "react";
 
-export default function DashboardPage() {
+import { useRouter, useSearchParams } from "next/navigation";
+import {
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
+import { Menu, ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { useEffect, useState, useMemo, Suspense } from "react";
+
+import {
+  getLookups,
+  getTransactionsByMonth,
+  getCurrentUser,
+} from "@/lib/api";
+
+// Utility: format currency
+function formatCurrency(value) {
+  const amount = Number(value) || 0;
+  return `${amount.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}฿`;
+}
+
+// Utility: date -> label like "10 Nov"
+function formatDateLabel(iso) {
+  const d = new Date(iso);
+  return d.toLocaleDateString("en-US", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+// Utility: month name
+function monthLabel(yyyy, mm) {
+  const d = new Date(Number(yyyy), Number(mm) - 1, 1);
+  return d
+    .toLocaleDateString("en-US", { month: "long", year: "numeric" })
+    .toUpperCase();
+}
+
+// Move +1 / -1 month
+function shiftMonth({ yyyy, mm }, delta) {
+  const d = new Date(Number(yyyy), Number(mm) - 1, 1);
+  d.setMonth(d.getMonth() + delta);
+  return {
+    yyyy: String(d.getFullYear()),
+    mm: String(d.getMonth() + 1).padStart(2, "0"),
+  };
+}
+
+function DashboardPage() {
   const router = useRouter();
+  const params = useSearchParams();
+
+  // Safe username state
+const [loginUsername, setLoginUsername] = useState("");
+
+// Read from URL + localStorage on client ONLY
+useEffect(() => {
+  const urlUser = params.get("user");
+  const saved = typeof window !== "undefined"
+    ? localStorage.getItem("username")
+    : "";
+
+  setLoginUsername(urlUser || saved || "");
+}, [params]);
+
+  // Dropdown state
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // Close on ESC
+  // Month state
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    const now = new Date();
+    return {
+      yyyy: String(now.getFullYear()),
+      mm: String(now.getMonth() + 1).padStart(2, "0"),
+    };
+  });
+
+  // API state
+  const [loading, setLoading] = useState(true);
+  const [categories, setCategories] = useState([]);
+  const [transactions, setTransactions] = useState([]);
+  const [user, setUser] = useState(null);
+
+  // Close menu using ESC
   useEffect(() => {
     const onKey = (e) => e.key === "Escape" && setMenuOpen(false);
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const data = [
-    { name: "Bill", value: 25, color: "#7b93ff" },
-    { name: "Food", value: 25, color: "#f3a7d3" },
-    { name: "Shopping", value: 50, color: "#c5a3e8" },
-  ];
+  // Fetch data whenever month changes
+  useEffect(() => {
+    let active = true;
 
-  const handleChartClick = () => router.push("/chart");
+    async function load() {
+      setLoading(true);
+      try {
+        const [lookups, txs, profile] = await Promise.all([
+          getLookups(),
+          getTransactionsByMonth(selectedMonth.yyyy, selectedMonth.mm),
+          getCurrentUser(),
+        ]);
+
+        if (!active) return;
+
+        setCategories(lookups.categories || []);
+        setTransactions(txs || []);
+        setUser(profile || null);
+      } catch (err) {
+        console.error("Dashboard error:", err);
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    load();
+    return () => {
+      active = false;
+    };
+  }, [selectedMonth]);
+
+  // Category color mapping
+  const colorMap = useMemo(() => {
+    const m = new Map();
+    categories.forEach((c) => m.set(c.key, c.color));
+    return m;
+  }, [categories]);
+
+  // Compute monthly totals
+  const totals = useMemo(() => {
+    return transactions.reduce(
+      (acc, tx) => {
+        const amount = Number(tx.amount) || 0;
+        if (tx.type === "Income") acc.income += amount;
+        else if (tx.type === "Expense") acc.expense += amount;
+        acc.balance = acc.income - acc.expense;
+        return acc;
+      },
+      { income: 0, expense: 0, balance: 0 }
+    );
+  }, [transactions]);
+
+  // Compute pie chart by category
+  const pieData = useMemo(() => {
+    const grouped = new Map();
+    transactions.forEach((tx) => {
+      const amount = Number(tx.amount) || 0;
+      const key = tx.category;
+      grouped.set(key, (grouped.get(key) || 0) + amount);
+    });
+
+    return Array.from(grouped.entries()).map(([key, value]) => ({
+      name:
+        categories.find((c) => c.key === key)?.name ??
+        key,
+      value,
+      color: colorMap.get(key) ?? "#d5cbbb",
+    }));
+  }, [transactions, categories, colorMap]);
+
+  // Total for % calculation
+  const totalValue = pieData.reduce((s, d) => s + d.value, 0);
+
+  // Latest 4 transactions
+  const recent = useMemo(() => {
+    return [...transactions]
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() -
+          new Date(a.createdAt).getTime()
+      )
+      .slice(0, 4);
+  }, [transactions]);
+
+  // Use username from login OR backend
+  const username = loginUsername || user?.username || "";
+
+  const goPrevMonth = () =>
+    setSelectedMonth((prev) => shiftMonth(prev, -1));
+  const goNextMonth = () =>
+    setSelectedMonth((prev) => shiftMonth(prev, 1));
+
+  const handleLogout = () => {
+    localStorage.removeItem("username");
+    setMenuOpen(false);
+    router.replace("/login");
+  };
+
+  const currLabel = monthLabel(
+    selectedMonth.yyyy,
+    selectedMonth.mm
+  );
 
   return (
-    <div className="min-h-screen bg-[#f9f3ec] flex flex-col items-center text-[#6b3e1f]">
-      {/* Top beige header strip */}
-      <div className="w-full h-12 bg-[#ead7c2] flex items-center justify-between px-4 relative">
+    <div className="flex flex-col items-center bg-[#f9f3ec] min-h-screen text-[#6b3e1f]">
+      {/* Header */}
+      <div className="relative flex justify-between items-center bg-[#ead7c2] px-4 w-full h-12">
         <div className="flex items-center space-x-2">
-          <ChevronLeft className="text-[#6b3e1f]" size={20} />
-          <h1 className="text-md font-semibold">NOVEMBER 2025</h1>
-          <ChevronRight className="text-[#6b3e1f]" size={20} />
+          <ChevronLeft
+            className="text-[#6b3e1f] cursor-pointer"
+            size={20}
+            onClick={goPrevMonth}
+          />
+          <h1 className="font-semibold text-md">
+            {currLabel}
+          </h1>
+          <ChevronRight
+            className="text-[#6b3e1f] cursor-pointer"
+            size={20}
+            onClick={goNextMonth}
+          />
         </div>
 
-        {/* Hamburger button */}
+        {/* Hamburger */}
         <button
           aria-label="Open menu"
           aria-expanded={menuOpen}
           onClick={() => setMenuOpen((v) => !v)}
-          className="p-2 rounded hover:bg-[#e3cdb4] active:scale-95 transition"
+          className="hover:bg-[#e3cdb4] p-2 rounded"
         >
           <Menu className="text-[#6b3e1f]" size={22} />
         </button>
 
-        {/* Click-away overlay */}
+        {/* Click-away */}
         {menuOpen && (
           <div
-            className="fixed inset-0 z-10"
+            className="z-10 fixed inset-0"
             onClick={() => setMenuOpen(false)}
           />
         )}
 
-        {/* Dropdown panel */}
+        {/* Dropdown */}
         {menuOpen && (
-          <div
-            className="absolute right-2 top-12 z-20 w-44 rounded-md border border-[#cbb89d] bg-white shadow-md overflow-hidden"
-            role="menu"
-          >
+          <div className="top-12 right-2 z-20 absolute bg-white shadow-md border border-[#cbb89d] rounded-md w-44">
             <button
-              className="w-full text-left px-3 py-2 text-sm hover:bg-[#f6efe6]"
-              onClick={() => {
-                setMenuOpen(false);
-                router.push("/profile");
-              }}
-              role="menuitem"
+              className="hover:bg-[#f6efe6] px-3 py-2 w-full text-left text-sm"
+              onClick={() => router.push("/profile")}
             >
               Profile
             </button>
-            <div className="h-px bg-[#ead7c2]" />
+            <div className="bg-[#ead7c2] h-px" />
             <button
-              className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-[#fce9e9]"
-              onClick={() => {
-                setMenuOpen(false);
-                router.push("/logout"); 
-              }}
-              role="menuitem"
+              className="hover:bg-[#fce9e9] px-3 py-2 w-full text-left text-red-600 text-sm"
+              onClick={handleLogout}
             >
               Log out
             </button>
@@ -82,82 +257,147 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* Clickable Pie Chart */}
+      {/* Chart */}
       <div
-        onClick={handleChartClick}
-        className="w-full max-w-xs mt-6 cursor-pointer active:scale-95 transition-transform"
+        onClick={() =>
+          router.push(
+            `/chart?yyyy=${selectedMonth.yyyy}&mm=${selectedMonth.mm}`
+          )
+        }
+        className="mt-6 w-full max-w-xs transition-transform cursor-pointer active:scale-95"
       >
-        <ResponsiveContainer width="100%" height={180}>
-          <PieChart>
-            <Pie data={data} cx="50%" cy="50%" outerRadius={70} dataKey="value">
-              {data.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={entry.color} />
-              ))}
-            </Pie>
-            <Tooltip />
-          </PieChart>
-        </ResponsiveContainer>
-        <div className="flex justify-center space-x-3 text-xs mt-2">
-          <span className="text-[#7b93ff] font-semibold">Bill 25%</span>
-          <span className="text-[#f3a7d3] font-semibold">Food 25%</span>
-          <span className="text-[#c5a3e8] font-semibold">Shopping 50%</span>
+        {pieData.length > 0 ? (
+          <ResponsiveContainer width="100%" height={180}>
+            <PieChart>
+              <Pie
+                data={pieData}
+                cx="50%"
+                cy="50%"
+                outerRadius={70}
+                dataKey="value"
+              >
+                {pieData.map((e, i) => (
+                  <Cell key={i} fill={e.color} />
+                ))}
+              </Pie>
+              <Tooltip formatter={(v) => formatCurrency(v)} />
+            </PieChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="flex justify-center items-center border border-[#cbb89d] border-dashed rounded h-[180px]">
+            <p>No data for this month</p>
+          </div>
+        )}
+
+        {/* Percent tags */}
+        <div className="flex flex-wrap justify-center gap-3 mt-2 text-xs">
+          {pieData.map((d) => (
+            <span
+              key={d.name}
+              className="font-semibold"
+              style={{ color: d.color }}
+            >
+              {d.name}{" "}
+              {totalValue
+                ? Math.round((d.value / totalValue) * 100)
+                : 0}
+              %
+            </span>
+          ))}
         </div>
       </div>
 
-      {/* Income / Expense / Balance box */}
-      <div className="mt-6 w-64 border border-gray-400 text-center rounded-sm overflow-hidden">
+      {/* Totals */}
+      <div className="mt-6 border border-gray-400 rounded-sm w-64 text-center overflow-hidden">
         <div className="flex">
           <div className="flex-1 bg-[#cce5cc] p-2 font-semibold text-[#2f5f2f]">
             Income
-            <br />0.00฿
+            <br />
+            {formatCurrency(totals.income)}
           </div>
           <div className="flex-1 bg-[#e7b3b3] p-2 font-semibold text-[#5f2f2f]">
             Expense
-            <br />0.00฿
+            <br />
+            {formatCurrency(totals.expense)}
           </div>
         </div>
-        <div className="bg-[#f4f4f4] p-2 font-semibold">Balance 0.00฿</div>
+        <div className="bg-[#f4f4f4] p-2 font-semibold">
+          Balance {formatCurrency(totals.balance)}
+        </div>
       </div>
 
-      {/* Recently Added */}
-      <div className="mt-8 w-72 border border-[#cbb89d] bg-[#f9f3ec] rounded-md p-4 text-left">
-        <h2 className="text-[#8b4f21] font-semibold mb-3">Recently Added</h2>
-        <ul className="space-y-2 text-sm">
-          <li className="flex justify-between items-center">
-            <span>1 Water bill</span>
-            <span className="bg-[#7b93ff] text-white text-xs px-2 py-0.5 rounded">Bill</span>
-          </li>
-          <li className="flex justify-between items-center">
-            <span>2 Clothes</span>
-            <span className="bg-[#c5a3e8] text-white text-xs px-2 py-0.5 rounded">Shopping</span>
-          </li>
-          <li className="flex justify-between items-center">
-            <span>3 Noodles</span>
-            <span className="bg-[#f3a7d3] text-white text-xs px-2 py-0.5 rounded">Food</span>
-          </li>
-          <li className="flex justify-between items-center">
-            <span>4 Salary Oct25</span>
-            <span className="bg-[#9cd89c] text-white text-xs px-2 py-0.5 rounded">Salary</span>
-          </li>
-        </ul>
+      {/* Recent */}
+      <div className="bg-[#f9f3ec] mt-8 p-4 border border-[#cbb89d] rounded-md w-72 text-left">
+        <h2 className="mb-3 font-semibold text-[#8b4f21]">
+          Recently Added
+        </h2>
+
+        {recent.length === 0 ? (
+          <p>No recent transactions.</p>
+        ) : (
+          <ul className="space-y-2 text-sm">
+            {recent.map((tx) => (
+              <li
+                key={tx.sk}
+                className="flex justify-between items-center"
+              >
+                <div>
+                  <span className="block font-semibold">
+                    {tx.name}
+                  </span>
+                  <span className="text-[#6b3e1f]/70 text-xs">
+                    {formatDateLabel(tx.date)}
+                  </span>
+                </div>
+
+                <span
+                  className="px-2 py-0.5 rounded font-semibold text-xs"
+                  style={{
+                    background:
+                      colorMap.get(tx.category) || "#ccc",
+                    color: "white",
+                  }}
+                >
+                  {
+                    categories.find(
+                      (c) => c.key === tx.category
+                    )?.name
+                  }
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
 
         <div
-          className="text-right text-[#8b4f21] text-xs mt-2 cursor-pointer hover:underline"
-          onClick={() => router.push("/seemore")}
+          className="text-right mt-2 text-[#8b4f21] text-xs hover:underline cursor-pointer"
+          onClick={() =>
+            router.push(
+              `/seemore?yyyy=${selectedMonth.yyyy}&mm=${selectedMonth.mm}`
+            )
+          }
         >
           see more &gt;&gt;
         </div>
       </div>
 
       {/* Add Button */}
-      <div className="mt-auto w-full bg-[#ead7c2] py-3 flex justify-center">
+      <div className="flex justify-center bg-[#ead7c2] mt-auto py-3 w-full">
         <button
           onClick={() => router.push("/transaction")}
-          className="bg-[#d5853c] text-white rounded-full p-3 shadow-md hover:bg-[#b96f2f]"
+          className="bg-[#d5853c] hover:bg-[#b96f2f] shadow-md p-3 rounded-full text-white"
         >
           <Plus size={22} />
         </button>
       </div>
     </div>
   );
+}
+
+export default function Page() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <DashboardPage />
+    </Suspense>
+  )
 }
