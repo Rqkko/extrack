@@ -53,9 +53,8 @@ export default function AdminDashboard() {
     }
   };
 
-  // View details now always goes to /admin/detail
-  const handleViewDetails = () => {
-    router.push('/admin/detail');
+  const handleViewDetails = (userId) => {
+    router.push(`/admin/detail?userId=${userId}`);
   };
 
   const handleActivate = (userId) => {
@@ -103,8 +102,21 @@ export default function AdminDashboard() {
       const colors = ['#f3a7d3', '#7b93ff', '#c5a3e8', '#9cd89c', '#f4dda7', '#ffa8a8', '#a8d5ff'];
       const randomColor = colors[Math.floor(Math.random() * colors.length)];
       
-      // TODO: Add API call to create category in backend
-      // const newCat = await createCategory({ name: categoryName.trim(), color: randomColor });
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/categories`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          key: categoryName.trim(),
+          name: categoryName.trim(),
+          color: randomColor
+        })
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || "Failed to save category");
+        return;
+      }
       
       const newCat = {
         key: `cat_${Date.now()}`,
@@ -174,7 +186,7 @@ export default function AdminDashboard() {
 
   // Filter users based on search
   const filteredUsers = users.filter(user => 
-    user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    user.username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     user.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -242,7 +254,7 @@ export default function AdminDashboard() {
                       <p>Transactions: {user.transactions}</p>
                     </div>
                     <button
-                      onClick={() => user.status === 'active' ? handleViewDetails() : handleActivate(user.id)}
+                      onClick={() => user.status === 'active' ? handleViewDetails(user.id) : handleActivate(user.id)}
                       className="bg-[#E9D6BF] mt-3 px-4 py-3 rounded-lg w-full font-semibold text-[#945C2B] transition-colors hover:bg:white active:scale-95"
                     >
                       {user.status === 'active' ? 'View Details' : 'Activate'}
