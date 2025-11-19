@@ -56,37 +56,37 @@ export default function AddCategory() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8F3ED] flex flex-col">
+    <div className="flex flex-col bg-[#F8F3ED] min-h-screen">
       {/* Top Header */}
-      <div className="w-full bg-[#945C2B] flex items-center justify-start px-6 py-3 relative fixed top-0 z-30 shadow-md">
-        <h1 className="text-xl font-semibold text-white">Add Category</h1>
+      <div className="relative top-0 z-30 fixed flex justify-start items-center bg-[#945C2B] shadow-md px-6 py-3 w-full">
+        <h1 className="font-semibold text-white text-xl">Add Category</h1>
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col items-center px-6 py-8 mt-14 pb-24">
-        <div className="w-full max-w-lg space-y-6">
+      <div className="flex flex-col flex-1 items-center mt-14 px-6 py-8 pb-24">
+        <div className="space-y-6 w-full max-w-lg">
           {/* Category Name Input */}
           <div>
-            <label className="block text-xl font-semibold text-[#945C2B] mb-3">
+            <label className="block mb-3 font-semibold text-[#945C2B] text-xl">
               Category Name
             </label>
             <input
               type="text"
               value={categoryName}
               onChange={(e) => setCategoryName(e.target.value)}
-              className="w-full px-4 py-3 bg-white border-2 border-[#945C2B] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#945C2B] text-[#945C2B] text-base"
+              className="bg-white px-4 py-3 border-[#945C2B] border-2 rounded-lg w-full text-[#945C2B] text-base focus:outline-none focus:ring-2 focus:ring-[#945C2B]"
               placeholder="Enter category name"
             />
           </div>
 
           {/* Select Color */}
           <div>
-            <h2 className="text-xl font-semibold text-[#945C2B] mb-4">Select Color</h2>
+            <h2 className="mb-4 font-semibold text-[#945C2B] text-xl">Select Color</h2>
             <div className="space-y-3">
               {colors.map((color) => (
                 <label
                   key={color.name}
-                  className="flex items-center gap-3 cursor-pointer group"
+                  className="group flex items-center gap-3 cursor-pointer"
                 >
                   <div className="relative">
                     <input
@@ -106,13 +106,13 @@ export default function AddCategory() {
                     >
                       {selectedColor === color.value && (
                         <div
-                          className="w-full h-full rounded-full"
+                          className="rounded-full w-full h-full"
                           style={{ backgroundColor: color.value }}
                         ></div>
                       )}
                     </div>
                   </div>
-                  <span className="text-lg font-medium text-[#945C2B] group-hover:text-[#7d4a22]">
+                  <span className="font-medium text-[#945C2B] text-lg group-hover:text-[#7d4a22]">
                     {color.name}
                   </span>
                 </label>
@@ -124,13 +124,13 @@ export default function AddCategory() {
           <div className="flex gap-3 pt-6">
             <button
               onClick={handleSave}
-              className="flex-1 bg-[#d5853c] hover:bg-[#b96f2f] text-white font-bold py-3 px-4 rounded-lg transition-colors active:scale-95 text-base"
+              className="flex-1 bg-[#d5853c] hover:bg-[#b96f2f] px-4 py-3 rounded-lg font-bold text-base text-white transition-colors active:scale-95"
             >
               SAVE CATEGORY
             </button>
             <button
               onClick={handleCancel}
-              className="flex-1 bg-[#945C2B] hover:bg-[#7d4a22] text-white font-bold py-3 px-4 rounded-lg transition-colors active:scale-95 text-base"
+              className="flex-1 bg-[#945C2B] hover:bg-[#7d4a22] px-4 py-3 rounded-lg font-bold text-base text-white transition-colors active:scale-95"
             >
               CANCEL
             </button>
@@ -139,12 +139,12 @@ export default function AddCategory() {
       </div>
 
       {/* Bottom Navigation */}
-<div className="w-full bg-[#E9D6BF] flex border-t-2 border-[#945C2B] fixed bottom-0">
+<div className="bottom-0 fixed flex bg-[#E9D6BF] border-[#945C2B] border-t-2 w-full">
   
   {/* Home */}
   <button 
   onClick={() => router.push('/admin/dashboard')}
-  className="flex-1 flex flex-col items-center justify-center py-4 hover:bg-white transition-colors active:scale-95"
+  className="flex flex-col flex-1 justify-center items-center hover:bg-white py-4 transition-colors active:scale-95"
   >
     <Home size={28} className="text-[#945C2B]" />
   </button>
@@ -152,28 +152,28 @@ export default function AddCategory() {
   {/* Users */}
   <button 
     onClick={() => router.push('/admin/detail')}
-    className="flex-1 flex flex-col items-center justify-center py-4 hover:bg-white transition-colors active:scale-95"
+    className="flex flex-col flex-1 justify-center items-center hover:bg-white py-4 transition-colors active:scale-95"
   >
     <Users size={28} className="text-[#945C2B]" />
   </button>
 
   {/* Plus */}
-  <button className="flex-1 flex flex-col items-center justify-center py-4 bg-white border-t-4 border-[#945C2B]">
+  <button className="flex flex-col flex-1 justify-center items-center bg-white py-4 border-[#945C2B] border-t-4">
     <PlusCircle size={28} className="text-[#945C2B]" />
   </button>
 
   {/* Pencil */}
-  <button 
+  {/* <button 
     onClick={() => router.push('/admin/edit')}
-    className="flex-1 flex flex-col items-center justify-center py-4 hover:bg-white transition-colors active:scale-95"
+    className="flex flex-col flex-1 justify-center items-center hover:bg-white py-4 transition-colors active:scale-95"
   >
     <Edit2 size={28} className="text-[#945C2B]" />
-  </button>
+  </button> */}
 
   {/* Logout */}
   <button 
     onClick={handleLogout}
-    className="flex-1 flex flex-col items-center justify-center py-4 hover:bg-white transition-colors active:scale-95"
+    className="flex flex-col flex-1 justify-center items-center hover:bg-white py-4 transition-colors active:scale-95"
   >
     <LogOut size={28} className="text-[#945C2B]" />
   </button>
