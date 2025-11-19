@@ -355,12 +355,12 @@ export default function AdminDashboard() {
         </button>
 
         {/* Pencil */}
-        <button 
+        {/* <button 
           onClick={() => router.push('/admin/edit')}
           className="flex flex-col flex-1 justify-center items-center hover:bg-white py-4 transition-colors active:scale-95"
         >
           <Edit2 size={28} className="text-[#945C2B]" />
-        </button>
+        </button> */}
 
         {/* Logout */}
         <button 
